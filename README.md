@@ -1,7 +1,7 @@
 GitHub Actions and Bicep Deployment Samples
 ===========================================
 
-This repository contains sample files demonstrating how to utilize GitHub Actions in conjunction with Bicep to deploy resources to Microsoft Azure in a first and simple attempt.
+This repository contains sample files demonstrating how to utilize GitHub Actions in conjunction with Bicep to deploy resources to Microsoft Azure in an extended attempt.
 
 Overview
 --------
