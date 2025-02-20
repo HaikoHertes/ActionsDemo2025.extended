@@ -1,0 +1,74 @@
+# See https://docs.github.com/en/actions/about-github-actions/understanding-github-actions?learn=getting_started&learnProduct=actions for initial information and concepts of GitHub Actions
+
+name: Deploy Bicep file
+on: 
+  # https://docs.github.com/en/actions/writing-workflows/choosing-when-your-workflow-runs/events-that-trigger-workflows
+  # push - to deploy on every push to main branch
+  # schedule - to deploy on a schedule
+  # workflow_dispatch - to deploy manually
+  push:
+    # Name branches to filther the push event
+    # https://docs.github.com/en/actions/writing-workflows/workflow-syntax-for-github-actions#using-filters
+    branches:
+      - main
+
+jobs: # Jobs run in parallel by default
+  deploy: # Name of the first (and single) job
+    
+    # Runner to use - in this case, GitHub-hosted runner - https://docs.github.com/en/actions/writing-workflows/workflow-syntax-for-github-actions#standard-github-hosted-runners-for-public-repositories
+    runs-on: ubuntu-latest
+
+    # Setting environment variables to be used in the workflow
+    env: 
+      RESOURCE_GROUP: 'RG-ActionsDemo2025'
+      DEPLOYMENT_NAME_PREFIX: 'ActionsDemo2025'
+
+    steps: # List of steps to run in the job sequentially
+
+    - name: Set deployment name with timestamp
+      id: set_deployment_name
+      run: |
+        DEPLOYMENT_NAME_PREFIX="${{ env.DEPLOYMENT_NAME_PREFIX }}"
+        TIMESTAMP=$(date +'%y%m%d_%H%M')
+        DEPLOYMENT_NAME="${TIMESTAMP}_${DEPLOYMENT_NAME_PREFIX}_Deploy"
+        echo "DEPLOYMENT_NAME=$DEPLOYMENT_NAME" >> $GITHUB_ENV
+        echo "DEPLOYMENT_NAME=$DEPLOYMENT_NAME" >> $GITHUB_OUTPUT
+    
+    - name: Checkout code
+      uses: actions/checkout@v4 # Public Action - see https://github.com/marketplace/actions/checkout
+
+    - name: Log into Azure
+      id: login_azure
+      uses: azure/login@v2 # Public Action - see https://github.com/marketplace/actions/azure-login
+      with:
+        creds: ${{ secrets.AZURE_CREDS }}
+
+    - name: Deploy Bicep file
+      id: deploy_bicep
+      uses: azure/bicep-deploy@v2 # Public Action - see https://github.com/marketplace/actions/bicep-deploy
+      with:
+        type: deployment
+        operation: create
+        name: ${{ steps.set_deployment_name.outputs.DEPLOYMENT_NAME }}
+        scope: resourceGroup
+        subscription-id: ${{ secrets.AZURE_SUB_ID }}
+        resource-group-name: ${{ env.RESOURCE_GROUP }}
+        template-file: './Bicep/storageAccount.bicep'
+        parameters: '{"parStoragePrefix": "ghadmo", 
+                      "parStorageSKU": "Standard_LRS"}'
+    
+    - name: Upload index.html
+      run: |
+        az storage blob upload \
+          --account-name "${{ steps.deploy_bicep.outputs.storageAccountName }}" \
+          --sas-token "${{ steps.deploy_bicep.outputs.sasToken }}" \
+          --container-name '$web' \
+          --name index.html \
+          --file './Website/index.html' \
+          --overwrite
+
+    - name: Show outputs and Link
+      id: get_outputs
+      run: |
+        echo "storageAccountName:            ${{ steps.deploy_bicep.outputs.storageAccountName }}"
+        echo "storageAccountPrimaryEndpoint: ${{ steps.deploy_bicep.outputs.storageAccountPrimaryEndpoint }}"
